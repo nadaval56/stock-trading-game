@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 import json
 import gspread
+import time
 from google.oauth2.service_account import Credentials
 
 # ============================================
@@ -208,6 +209,20 @@ def save_portfolios(portfolios=None):
     except Exception as e:
         st.error(f"שגיאה בשמירת נתונים: {e}")
         return False
+
+def reset_portfolio(username):
+    """איפוס תיק של משתמש ספציפי"""
+    if username in st.session_state.portfolios:
+        # איפוס התיק
+        st.session_state.portfolios[username] = {
+            'cash': 10000,
+            'stocks': {},
+            'history': []
+        }
+        # שמירה ל-Google Sheets
+        save_portfolios()
+        return True
+    return False
 
 def get_usd_to_ils():
     """קבלת שער USD/ILS מיומי"""
@@ -557,7 +572,13 @@ def main_page():
     st.markdown("---")
     
     # טאבים
-    tab1, tab2, tab3 = st.tabs(["💰 קנה/מכור", "📊 התיק שלי", "📜 היסטוריה"])
+    # הוספת טאב מיוחד למורה
+    is_teacher = (username == "nadav")
+    
+    if is_teacher:
+        tab1, tab2, tab3, tab4 = st.tabs(["💰 קנה/מכור", "📊 התיק שלי", "📜 היסטוריה", "👨‍🏫 לוח בקרת מורה"])
+    else:
+        tab1, tab2, tab3 = st.tabs(["💰 קנה/מכור", "📊 התיק שלי", "📜 היסטוריה"])
     
     # ===== טאב 1: קנייה ומכירה =====
     with tab1:
@@ -770,6 +791,105 @@ def main_page():
                 st.markdown("---")
         else:
             st.info("עדיין לא ביצעת עסקאות")
+    
+    # ===== טאב 4: לוח בקרת מורה (רק למורה) =====
+    if is_teacher:
+        with tab4:
+            st.subheader("👨‍🏫 לוח בקרת מורה")
+            st.info("🎓 כאן תוכל לנהל את תיקי התלמידים")
+            
+            # סטטיסטיקות כלליות
+            st.markdown("### 📊 סטטיסטיקות כיתה")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            total_students = len(st.session_state.portfolios) - 1  # -1 למורה
+            total_cash = sum(p['cash'] for u, p in st.session_state.portfolios.items() if u != username)
+            total_trades = sum(len(p['history']) for u, p in st.session_state.portfolios.items() if u != username)
+            
+            with col1:
+                st.metric("👥 מספר תלמידים", total_students)
+            with col2:
+                st.metric("💰 סך מזומן בכיתה", f"₪{total_cash:.2f}")
+            with col3:
+                st.metric("📈 סך עסקאות", total_trades)
+            
+            st.markdown("---")
+            
+            # טבלת תלמידים
+            st.markdown("### 👥 ניהול תלמידים")
+            
+            # בניית טבלה של כל התלמידים
+            students_data = []
+            for student_name, student_portfolio in st.session_state.portfolios.items():
+                if student_name == username:  # דלג על המורה
+                    continue
+                
+                # חישוב שווי תיק
+                stocks_value = 0
+                for symbol, data in student_portfolio['stocks'].items():
+                    current_price = get_stock_price(symbol)
+                    if current_price:
+                        stocks_value += current_price * get_usd_to_ils() * data['shares']
+                
+                total_value = student_portfolio['cash'] + stocks_value
+                profit = total_value - 10000
+                
+                students_data.append({
+                    'תלמיד': student_name,
+                    'יתרת מזומן': f"₪{student_portfolio['cash']:.2f}",
+                    'שווי מניות': f"₪{stocks_value:.2f}",
+                    'שווי כולל': f"₪{total_value:.2f}",
+                    'רווח/הפסד': f"₪{profit:+.2f}",
+                    'עסקאות': len(student_portfolio['history']),
+                    'מניות בתיק': len(student_portfolio['stocks'])
+                })
+            
+            if students_data:
+                df = pd.DataFrame(students_data)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            
+            # איפוס תלמיד
+            st.markdown("### 🔄 איפוס תיק תלמיד")
+            st.warning("⚠️ פעולת איפוס תמחק את כל המניות וההיסטוריה של התלמיד ותחזיר את התיק ל-₪10,000")
+            
+            # בחירת תלמיד
+            students_list = [s for s in st.session_state.portfolios.keys() if s != username]
+            if students_list:
+                selected_student = st.selectbox("בחר תלמיד לאיפוס", students_list)
+                
+                col_btn, col_space = st.columns([1, 3])
+                with col_btn:
+                    if st.button("🔄 אפס תיק", type="primary"):
+                        if 'confirm_teacher_reset' not in st.session_state:
+                            st.session_state.confirm_teacher_reset = selected_student
+                            st.rerun()
+                
+                # אישור איפוס
+                if st.session_state.get('confirm_teacher_reset'):
+                    student_to_reset = st.session_state.confirm_teacher_reset
+                    st.error(f"❗ **האם לאפס את התיק של {student_to_reset}?** זו פעולה בלתי הפיכה!")
+                    
+                    col_yes, col_no = st.columns(2)
+                    
+                    with col_yes:
+                        if st.button("✅ כן, אפס תיק", type="primary", key="confirm_yes"):
+                            if reset_portfolio(student_to_reset):
+                                st.session_state.confirm_teacher_reset = None
+                                st.success(f"✅ התיק של {student_to_reset} אופס בהצלחה!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ שגיאה באיפוס התיק")
+                    
+                    with col_no:
+                        if st.button("❌ ביטול", key="confirm_no"):
+                            st.session_state.confirm_teacher_reset = None
+                            st.rerun()
+            else:
+                st.info("אין תלמידים במערכת")
 
 # ============================================
 # הרצת האפליקציה
