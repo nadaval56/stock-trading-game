@@ -24,12 +24,18 @@ st.markdown("""
         direction: rtl;
     }
     
+    /* יישור כותרות לימין */
+    h1, h2, h3, h4, h5, h6 {
+        text-align: right !important;
+        direction: rtl !important;
+    }
+    
     /* יישור טקסטים לימין */
     .stMarkdown, .stText {
         text-align: right;
     }
     
-    /* כפתורים וטפסים */
+    /* כפתורים */
     .stButton > button {
         direction: rtl;
     }
@@ -47,9 +53,34 @@ st.markdown("""
         direction: rtl;
     }
     
-    /* מטריקות (metrics) */
+    /* מטריקות - התוויות */
+    [data-testid="stMetricLabel"] {
+        text-align: right !important;
+        direction: rtl !important;
+    }
+    
+    /* מטריקות - הערכים (המספרים נשארים LTR אבל מיושרים לימין) */
     [data-testid="stMetricValue"] {
-        direction: ltr;
+        direction: ltr !important;
+        text-align: right !important;
+        display: block !important;
+    }
+    
+    /* מטריקות - הדלתא */
+    [data-testid="stMetricDelta"] {
+        direction: ltr !important;
+        text-align: right !important;
+    }
+    
+    /* יישור עמודות */
+    [data-testid="column"] {
+        text-align: right;
+    }
+    
+    /* info boxes */
+    .stAlert {
+        direction: rtl;
+        text-align: right;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -329,7 +360,7 @@ def buy_stock(username, symbol, shares):
     
     # בדיקת יתרה
     if portfolio['cash'] < total_with_commission:
-        return False, f"אין מספיק כסף. צריך: {total_with_commission:.2f} ₪, יש: {portfolio['cash']:.2f} ₪"
+        return False, f"אין מספיק כסף. צריך: ₪{total_with_commission:.2f}, יש: ₪{portfolio['cash']:.2f}"
     
     # ביצוע הקנייה
     portfolio['cash'] -= total_with_commission
@@ -360,7 +391,7 @@ def buy_stock(username, symbol, shares):
     })
     
     save_portfolios()
-    return True, f"קנית {shares} מניות של {symbol} ב-${price_usd:.2f} ({price_ils:.2f} ₪) | עמלה: {commission:.2f} ₪"
+    return True, f"קנית {shares} מניות של {symbol} ב-${price_usd:.2f} (₪{price_ils:.2f}) | עמלה: ₪{commission:.2f}"
 
 def sell_stock(username, symbol, shares):
     """מכירת מניה"""
@@ -405,7 +436,7 @@ def sell_stock(username, symbol, shares):
     })
     
     save_portfolios()
-    return True, f"מכרת {shares} מניות של {symbol} ב-${price_usd:.2f} ({price_ils:.2f} ₪) | עמלה: {commission:.2f} ₪"
+    return True, f"מכרת {shares} מניות של {symbol} ב-${price_usd:.2f} (₪{price_ils:.2f}) | עמלה: ₪{commission:.2f}"
 
 # ============================================
 # ממשק משתמש - התחברות
@@ -461,7 +492,7 @@ def main_page():
     st.markdown("---")
     # הצגת שער דולר
     usd_to_ils = get_usd_to_ils()
-    st.info(f"💱 **שער דולר-שקל היום:** ${1:.2f} = {usd_to_ils:.3f} ₪")
+    st.info(f"💱 **שער דולר-שקל היום:** $1.00 = ₪{usd_to_ils:.3f}")
     
     # חישוב שווי תיק נוכחי
     stocks_value = 0
@@ -499,18 +530,18 @@ def main_page():
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.metric("💵 יתרת מזומן", f"{portfolio['cash']:.2f} ₪")
+        st.metric("💵 יתרת מזומן", f"₪{portfolio['cash']:.2f}")
     
     with col2:
-        st.metric("📊 שווי מניות", f"{stocks_value:.2f} ₪")
+        st.metric("📊 שווי מניות", f"₪{stocks_value:.2f}")
     
     with col3:
-        st.metric("💼 שווי תיק כולל", f"{total_value:.2f} ₪")
+        st.metric("💼 שווי תיק כולל", f"₪{total_value:.2f}")
     
     with col4:
         st.metric(
             "📅 רווח/הפסד יומי", 
-            f"{daily_change:+.2f} ₪",
+            f"₪{daily_change:+.2f}",
             f"{daily_change_percent:+.2f}%",
             delta_color="normal"
         )
@@ -518,7 +549,7 @@ def main_page():
     with col5:
         st.metric(
             "📈 רווח/הפסד כולל", 
-            f"{profit_loss:+.2f} ₪",
+            f"₪{profit_loss:+.2f}",
             f"{profit_loss_percent:+.2f}%",
             delta_color="normal"
         )
@@ -609,7 +640,7 @@ def main_page():
                     price_ils = info['price'] * usd_to_ils
                     
                     # הצגת מחיר
-                    st.info(f"**{info['name']}** - מחיר נוכחי: ${info['price']:.2f} ({price_ils:.2f} ₪)")
+                    st.info(f"**{info['name']}** - מחיר נוכחי: ${info['price']:.2f} (₪{price_ils:.2f})")
                     
                     # הצגת תיאור
                     description = get_stock_description(buy_symbol)
@@ -666,7 +697,7 @@ def main_page():
                 if current_price:
                     usd_to_ils = get_usd_to_ils()
                     price_ils = current_price * usd_to_ils
-                    st.info(f"מחיר נוכחי: ${current_price:.2f} ({price_ils:.2f} ₪)")
+                    st.info(f"מחיר נוכחי: ${current_price:.2f} (₪{price_ils:.2f})")
                 
                 sell_shares = st.number_input(
                     "כמות מניות למכירה", 
@@ -706,10 +737,10 @@ def main_page():
                     rows.append({
                         'סימול': symbol,
                         'כמות': data['shares'],
-                        'מחיר קנייה ממוצע': f"{data['avg_price']:.2f} ₪",
-                        'מחיר נוכחי': f"${current_price_usd:.2f} ({current_price_ils:.2f} ₪)",
-                        'שווי נוכחי': f"{current_value:.2f} ₪",
-                        'רווח/הפסד': f"{profit_loss:+.2f} ₪ ({profit_loss_pct:+.2f}%)"
+                        'מחיר קנייה ממוצע': f"₪{data['avg_price']:.2f}",
+                        'מחיר נוכחי': f"${current_price_usd:.2f} (₪{current_price_ils:.2f})",
+                        'שווי נוכחי': f"₪{current_value:.2f}",
+                        'רווח/הפסד': f"₪{profit_loss:+.2f} ({profit_loss_pct:+.2f}%)"
                     })
             
             df = pd.DataFrame(rows)
