@@ -140,6 +140,18 @@ def save_portfolios(portfolios=None):
         st.error(f"שגיאה בשמירת נתונים: {e}")
         return False
 
+def get_usd_to_ils():
+    """קבלת שער USD/ILS מיומי"""
+    try:
+        ticker = yf.Ticker("ILS=X")
+        hist = ticker.history(period='1d')
+        if not hist.empty:
+            return hist['Close'].iloc[-1]
+        # אם לא עובד, נשתמש בשער ברירת מחדל
+        return 3.6
+    except:
+        return 3.6
+
 def get_stock_price(symbol):
     """משיכת מחיר מניה מ-Yahoo Finance"""
     try:
@@ -178,8 +190,11 @@ def buy_stock(username, symbol, shares):
     if not info or info['price'] is None:
         return False, "לא נמצא סימול מניה תקין"
     
-    price = info['price']
-    total_cost = price * shares
+    price_usd = info['price']
+    usd_to_ils = get_usd_to_ils()
+    price_ils = price_usd * usd_to_ils  # המרה לשקלים!
+    
+    total_cost = price_ils * shares
     commission = calculate_commission(total_cost)
     total_with_commission = total_cost + commission
     
@@ -192,18 +207,18 @@ def buy_stock(username, symbol, shares):
     # ביצוע הקנייה
     portfolio['cash'] -= total_with_commission
     
-    # עדכון מניות בתיק
+    # עדכון מניות בתיק (שמור בשקלים!)
     if symbol in portfolio['stocks']:
         # עדכון ממוצע משוקלל
         old_shares = portfolio['stocks'][symbol]['shares']
         old_avg = portfolio['stocks'][symbol]['avg_price']
-        new_avg = (old_shares * old_avg + shares * price) / (old_shares + shares)
+        new_avg = (old_shares * old_avg + shares * price_ils) / (old_shares + shares)
         portfolio['stocks'][symbol]['shares'] += shares
         portfolio['stocks'][symbol]['avg_price'] = new_avg
     else:
         portfolio['stocks'][symbol] = {
             'shares': shares,
-            'avg_price': price
+            'avg_price': price_ils
         }
     
     # תיעוד בהיסטוריה
@@ -212,13 +227,13 @@ def buy_stock(username, symbol, shares):
         'action': 'buy',
         'symbol': symbol,
         'shares': shares,
-        'price': price,
+        'price': price_ils,
         'commission': commission,
         'total': total_with_commission
     })
     
     save_portfolios()
-    return True, f"קנית {shares} מניות של {symbol} ב-${price:.2f} (עמלה: {commission:.2f} ₪)"
+    return True, f"קנית {shares} מניות של {symbol} ב-${price_usd:.2f} ({price_ils:.2f} ₪) | עמלה: {commission:.2f} ₪"
 
 def sell_stock(username, symbol, shares):
     """מכירת מניה"""
@@ -231,12 +246,15 @@ def sell_stock(username, symbol, shares):
     if portfolio['stocks'][symbol]['shares'] < shares:
         return False, f"אין לך מספיק מניות. יש לך: {portfolio['stocks'][symbol]['shares']}"
     
-    # קבלת מחיר נוכחי
-    price = get_stock_price(symbol)
-    if price is None:
+    # קבלת מחיר נוכחי בדולרים והמרה לשקלים
+    price_usd = get_stock_price(symbol)
+    if price_usd is None:
         return False, "שגיאה במשיכת מחיר"
     
-    total_value = price * shares
+    usd_to_ils = get_usd_to_ils()
+    price_ils = price_usd * usd_to_ils  # המרה לשקלים!
+    
+    total_value = price_ils * shares
     commission = calculate_commission(total_value)
     total_after_commission = total_value - commission
     
@@ -254,13 +272,13 @@ def sell_stock(username, symbol, shares):
         'action': 'sell',
         'symbol': symbol,
         'shares': shares,
-        'price': price,
+        'price': price_ils,
         'commission': commission,
         'total': total_after_commission
     })
     
     save_portfolios()
-    return True, f"מכרת {shares} מניות של {symbol} ב-${price:.2f} (עמלה: {commission:.2f} ₪)"
+    return True, f"מכרת {shares} מניות של {symbol} ב-${price_usd:.2f} ({price_ils:.2f} ₪) | עמלה: {commission:.2f} ₪"
 
 # ============================================
 # ממשק משתמש - התחברות
@@ -316,11 +334,13 @@ def main_page():
     st.markdown("---")
     
     # חישוב שווי תיק נוכחי
+    usd_to_ils = get_usd_to_ils()
     stocks_value = 0
     for symbol, data in portfolio['stocks'].items():
-        current_price = get_stock_price(symbol)
-        if current_price:
-            stocks_value += current_price * data['shares']
+        current_price_usd = get_stock_price(symbol)
+        if current_price_usd:
+            current_price_ils = current_price_usd * usd_to_ils  # המרה לשקלים!
+            stocks_value += current_price_ils * data['shares']
     
     total_value = portfolio['cash'] + stocks_value
     profit_loss = total_value - 10000
@@ -359,15 +379,47 @@ def main_page():
         with col1:
             st.subheader("🛒 קנה מניה")
             
-            buy_symbol = st.text_input(
-                "סימול מניה (לדוגמה: AAPL, MSFT, TEVA)",
-                key="buy_symbol"
-            ).upper()
+            # רשימת מניות פופולריות
+            popular_stocks = {
+                "Apple (AAPL)": "AAPL",
+                "Microsoft (MSFT)": "MSFT",
+                "Tesla (TSLA)": "TSLA",
+                "Amazon (AMZN)": "AMZN",
+                "Google (GOOGL)": "GOOGL",
+                "Meta/Facebook (META)": "META",
+                "NVIDIA (NVDA)": "NVDA",
+                "Netflix (NFLX)": "NFLX",
+                "Coca-Cola (KO)": "KO",
+                "McDonald's (MCD)": "MCD",
+                "Nike (NKE)": "NKE",
+                "Disney (DIS)": "DIS",
+                "Intel (INTC)": "INTC",
+                "AMD (AMD)": "AMD",
+                "Teva (TEVA)": "TEVA",
+                "--- או הכנס ידנית ---": "CUSTOM"
+            }
             
-            if buy_symbol:
+            stock_choice = st.selectbox(
+                "בחר מניה",
+                options=list(popular_stocks.keys()),
+                key="stock_choice"
+            )
+            
+            # אם בחר "הכנס ידנית" - תן לו להקליד
+            if popular_stocks[stock_choice] == "CUSTOM":
+                buy_symbol = st.text_input(
+                    "הכנס סימול (לדוגמה: AAPL)",
+                    key="buy_symbol_custom"
+                ).upper()
+            else:
+                buy_symbol = popular_stocks[stock_choice]
+            
+            if buy_symbol and buy_symbol != "CUSTOM":
                 info = get_stock_info(buy_symbol)
                 if info and info['price']:
-                    st.info(f"**{info['name']}** - מחיר נוכחי: ${info['price']:.2f}")
+                    usd_to_ils = get_usd_to_ils()
+                    price_ils = info['price'] * usd_to_ils
+                    st.info(f"**{info['name']}** - מחיר נוכחי: ${info['price']:.2f} ({price_ils:.2f} ₪)")
                 else:
                     st.warning("לא נמצא סימול תקין")
             
@@ -397,7 +449,9 @@ def main_page():
                 
                 current_price = get_stock_price(sell_symbol)
                 if current_price:
-                    st.info(f"מחיר נוכחי: ${current_price:.2f}")
+                    usd_to_ils = get_usd_to_ils()
+                    price_ils = current_price * usd_to_ils
+                    st.info(f"מחיר נוכחי: ${current_price:.2f} ({price_ils:.2f} ₪)")
                 
                 sell_shares = st.number_input(
                     "כמות מניות למכירה", 
@@ -423,11 +477,13 @@ def main_page():
         
         if portfolio['stocks']:
             # יצירת טבלה
+            usd_to_ils = get_usd_to_ils()
             rows = []
             for symbol, data in portfolio['stocks'].items():
-                current_price = get_stock_price(symbol)
-                if current_price:
-                    current_value = current_price * data['shares']
+                current_price_usd = get_stock_price(symbol)
+                if current_price_usd:
+                    current_price_ils = current_price_usd * usd_to_ils  # המרה לשקלים!
+                    current_value = current_price_ils * data['shares']
                     purchase_value = data['avg_price'] * data['shares']
                     profit_loss = current_value - purchase_value
                     profit_loss_pct = (profit_loss / purchase_value) * 100
@@ -435,10 +491,10 @@ def main_page():
                     rows.append({
                         'סימול': symbol,
                         'כמות': data['shares'],
-                        'מחיר קנייה ממוצע': f"${data['avg_price']:.2f}",
-                        'מחיר נוכחי': f"${current_price:.2f}",
-                        'שווי נוכחי': f"${current_value:.2f}",
-                        'רווח/הפסד': f"${profit_loss:+.2f} ({profit_loss_pct:+.2f}%)"
+                        'מחיר קנייה ממוצע': f"{data['avg_price']:.2f} ₪",
+                        'מחיר נוכחי': f"${current_price_usd:.2f} ({current_price_ils:.2f} ₪)",
+                        'שווי נוכחי': f"{current_value:.2f} ₪",
+                        'רווח/הפסד': f"{profit_loss:+.2f} ₪ ({profit_loss_pct:+.2f}%)"
                     })
             
             df = pd.DataFrame(rows)
