@@ -147,12 +147,40 @@ def load_portfolios():
         # המרת נתוני הגיליון לפורמט של portfolios
         portfolios = {}
         for row in all_data:
-            username = row['username']
-            portfolios[username] = {
-                'cash': float(row['cash']),
-                'stocks': json.loads(row['stocks']) if row['stocks'] else {},
-                'history': json.loads(row['history']) if row['history'] else []
-            }
+            try:
+                username = row.get('username', '')
+                if not username:
+                    continue
+                
+                # טעינה בטוחה של כל שדה
+                cash = float(row.get('cash', 10000))
+                
+                stocks_str = row.get('stocks', '{}')
+                if stocks_str and stocks_str.strip():
+                    try:
+                        stocks = json.loads(stocks_str)
+                    except:
+                        stocks = {}
+                else:
+                    stocks = {}
+                
+                history_str = row.get('history', '[]')
+                if history_str and history_str.strip():
+                    try:
+                        history = json.loads(history_str)
+                    except:
+                        history = []
+                else:
+                    history = []
+                
+                portfolios[username] = {
+                    'cash': cash,
+                    'stocks': stocks,
+                    'history': history
+                }
+            except Exception as e:
+                # אם יש שגיאה בשורה - דלג עליה
+                continue
         
         return portfolios
     except Exception as e:
@@ -223,6 +251,27 @@ def reset_portfolio(username):
         save_portfolios()
         return True
     return False
+
+def validate_portfolio(portfolio):
+    """וידוא שהתיק תקין - תיקון אם נדרש"""
+    if not isinstance(portfolio, dict):
+        return {
+            'cash': 10000,
+            'stocks': {},
+            'history': []
+        }
+    
+    # וידוא שדות
+    if 'cash' not in portfolio or not isinstance(portfolio['cash'], (int, float)):
+        portfolio['cash'] = 10000
+    
+    if 'stocks' not in portfolio or not isinstance(portfolio['stocks'], dict):
+        portfolio['stocks'] = {}
+    
+    if 'history' not in portfolio or not isinstance(portfolio['history'], list):
+        portfolio['history'] = []
+    
+    return portfolio
 
 def get_usd_to_ils():
     """קבלת שער USD/ILS מיומי"""
@@ -486,6 +535,10 @@ def main_page():
     """הדף הראשי של המערכת"""
     username = st.session_state.username
     portfolio = st.session_state.portfolios[username]
+    
+    # וידוא שהתיק תקין (במקרה של נתונים פגומים)
+    portfolio = validate_portfolio(portfolio)
+    st.session_state.portfolios[username] = portfolio
     
     # כותרת עליונה
     col_title, col_refresh, col_logout = st.columns([3, 1, 1])
@@ -890,6 +943,40 @@ def main_page():
                             st.rerun()
             else:
                 st.info("אין תלמידים במערכת")
+            
+            st.markdown("---")
+            
+            # איפוס תיק המורה
+            st.markdown("### 🔄 איפוס התיק שלי (מורה)")
+            st.warning("⚠️ פעולת איפוס תמחק את כל המניות וההיסטוריה שלך ותחזיר את התיק ל-₪10,000")
+            
+            col_btn2, col_space2 = st.columns([1, 3])
+            with col_btn2:
+                if st.button("🔄 אפס את התיק שלי", type="secondary"):
+                    if 'confirm_self_reset' not in st.session_state:
+                        st.session_state.confirm_self_reset = True
+                        st.rerun()
+            
+            # אישור איפוס עצמי
+            if st.session_state.get('confirm_self_reset'):
+                st.error(f"❗ **האם לאפס את התיק שלך?** זו פעולה בלתי הפיכה!")
+                
+                col_yes2, col_no2 = st.columns(2)
+                
+                with col_yes2:
+                    if st.button("✅ כן, אפס", type="primary", key="confirm_self_yes"):
+                        if reset_portfolio(username):
+                            st.session_state.confirm_self_reset = None
+                            st.success("✅ התיק שלך אופס בהצלחה!")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("❌ שגיאה באיפוס התיק")
+                
+                with col_no2:
+                    if st.button("❌ ביטול", key="confirm_self_no"):
+                        st.session_state.confirm_self_reset = None
+                        st.rerun()
 
 # ============================================
 # הרצת האפליקציה
