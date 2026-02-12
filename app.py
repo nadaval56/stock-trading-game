@@ -152,6 +152,69 @@ def get_usd_to_ils():
     except:
         return 3.6
 
+def get_stock_performance(symbol):
+    """קבלת ביצועים היסטוריים של מניה"""
+    try:
+        stock = yf.Ticker(symbol)
+        
+        # שליפת נתונים של חודש אחרון
+        hist = stock.history(period='1mo')
+        if hist.empty:
+            return None
+        
+        current_price = hist['Close'].iloc[-1]
+        
+        # חישוב שינויים
+        perf = {}
+        
+        # שינוי יומי (אם יש לפחות 2 ימים)
+        if len(hist) >= 2:
+            prev_close = hist['Close'].iloc[-2]
+            perf['daily_change'] = ((current_price - prev_close) / prev_close) * 100
+        
+        # שינוי שבועי (אם יש לפחות 5 ימי מסחר)
+        if len(hist) >= 5:
+            week_ago = hist['Close'].iloc[-5]
+            perf['weekly_change'] = ((current_price - week_ago) / week_ago) * 100
+        
+        # שינוי חודשי (מההתחלה של הנתונים)
+        if len(hist) >= 20:
+            month_ago = hist['Close'].iloc[0]
+            perf['monthly_change'] = ((current_price - month_ago) / month_ago) * 100
+        
+        return perf
+    except:
+        return None
+
+def get_stock_description(symbol):
+    """קבלת תיאור המניה"""
+    try:
+        stock = yf.Ticker(symbol)
+        info = stock.info
+        
+        # תיאורים מותאמים למניות סל
+        etf_descriptions = {
+            'SPY': '📊 מניית סל העוקבת אחר מדד S&P 500 - 500 החברות הגדולות בארה"ב מכל התחומים.',
+            'QQQ': '📊 מניית סל העוקבת אחר מדד NASDAQ 100 - 100 חברות הטכנולוגיה המובילות (אפל, מיקרוסופט, גוגל ועוד).',
+            'VTI': '📊 מניית סל של Vanguard - כמעט כל השוק האמריקאי (כ-4,000 מניות!)',
+            'VXUS': '📊 מניית סל של Vanguard - חברות מכל העולם מחוץ לארה"ב (אירופה, אסיה, שווקים מתעוררים).',
+            'VOO': '📊 מניית סל של Vanguard - עוקבת אחר S&P 500, דומה ל-SPY עם עמלות נמוכות יותר.'
+        }
+        
+        if symbol in etf_descriptions:
+            return etf_descriptions[symbol]
+        
+        # לחברות רגילות - נסה לקבל תיאור
+        desc = info.get('longBusinessSummary', '')
+        if desc:
+            # קח רק את 200 התווים הראשונים
+            return desc[:200] + "..." if len(desc) > 200 else desc
+        
+        # אם אין תיאור
+        return info.get('longName', symbol)
+    except:
+        return None
+
 def get_stock_price(symbol):
     """משיכת מחיר מניה מ-Yahoo Finance"""
     try:
@@ -338,18 +401,38 @@ def main_page():
     
     # חישוב שווי תיק נוכחי
     stocks_value = 0
+    stocks_value_yesterday = 0
+    
     for symbol, data in portfolio['stocks'].items():
         current_price_usd = get_stock_price(symbol)
         if current_price_usd:
-            current_price_ils = current_price_usd * usd_to_ils  # המרה לשקלים!
+            current_price_ils = current_price_usd * usd_to_ils
             stocks_value += current_price_ils * data['shares']
+            
+            # חישוב שווי אתמול (בערך)
+            try:
+                stock = yf.Ticker(symbol)
+                hist = stock.history(period='2d')
+                if len(hist) >= 2:
+                    yesterday_price_usd = hist['Close'].iloc[-2]
+                    yesterday_price_ils = yesterday_price_usd * usd_to_ils
+                    stocks_value_yesterday += yesterday_price_ils * data['shares']
+                else:
+                    stocks_value_yesterday += current_price_ils * data['shares']
+            except:
+                stocks_value_yesterday += current_price_ils * data['shares']
     
     total_value = portfolio['cash'] + stocks_value
+    total_value_yesterday = portfolio['cash'] + stocks_value_yesterday
+    
     profit_loss = total_value - 10000
     profit_loss_percent = (profit_loss / 10000) * 100
     
+    daily_change = total_value - total_value_yesterday
+    daily_change_percent = (daily_change / total_value_yesterday) * 100 if total_value_yesterday > 0 else 0
+    
     # תצוגת סטטיסטיקות
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         st.metric("💵 יתרת מזומן", f"{portfolio['cash']:.2f} ₪")
@@ -362,7 +445,15 @@ def main_page():
     
     with col4:
         st.metric(
-            "📈 רווח/הפסד", 
+            "📅 רווח/הפסד יומי", 
+            f"{daily_change:+.2f} ₪",
+            f"{daily_change_percent:+.2f}%",
+            delta_color="normal"
+        )
+    
+    with col5:
+        st.metric(
+            "📈 רווח/הפסד כולל", 
             f"{profit_loss:+.2f} ₪",
             f"{profit_loss_percent:+.2f}%",
             delta_color="normal"
@@ -452,7 +543,34 @@ def main_page():
                 if info and info['price']:
                     usd_to_ils = get_usd_to_ils()
                     price_ils = info['price'] * usd_to_ils
+                    
+                    # הצגת מחיר
                     st.info(f"**{info['name']}** - מחיר נוכחי: ${info['price']:.2f} ({price_ils:.2f} ₪)")
+                    
+                    # הצגת תיאור
+                    description = get_stock_description(buy_symbol)
+                    if description:
+                        st.markdown(f"ℹ️ {description}")
+                    
+                    # הצגת ביצועים היסטוריים
+                    perf = get_stock_performance(buy_symbol)
+                    if perf:
+                        perf_cols = st.columns(3)
+                        if 'daily_change' in perf:
+                            with perf_cols[0]:
+                                emoji = "📈" if perf['daily_change'] >= 0 else "📉"
+                                color = "green" if perf['daily_change'] >= 0 else "red"
+                                st.markdown(f"{emoji} **יומי:** :{color}[{perf['daily_change']:+.2f}%]")
+                        if 'weekly_change' in perf:
+                            with perf_cols[1]:
+                                emoji = "📈" if perf['weekly_change'] >= 0 else "📉"
+                                color = "green" if perf['weekly_change'] >= 0 else "red"
+                                st.markdown(f"{emoji} **שבועי:** :{color}[{perf['weekly_change']:+.2f}%]")
+                        if 'monthly_change' in perf:
+                            with perf_cols[2]:
+                                emoji = "📈" if perf['monthly_change'] >= 0 else "📉"
+                                color = "green" if perf['monthly_change'] >= 0 else "red"
+                                st.markdown(f"{emoji} **חודשי:** :{color}[{perf['monthly_change']:+.2f}%]")
                 else:
                     st.warning("לא נמצא סימול תקין")
             
