@@ -16,6 +16,44 @@ st.set_page_config(
     layout="wide"
 )
 
+# הגדרת כיווניות מימין לשמאל (RTL) לעברית
+st.markdown("""
+<style>
+    /* כיווניות RTL לכל האפליקציה */
+    .stApp {
+        direction: rtl;
+    }
+    
+    /* יישור טקסטים לימין */
+    .stMarkdown, .stText {
+        text-align: right;
+    }
+    
+    /* כפתורים וטפסים */
+    .stButton > button {
+        direction: rtl;
+    }
+    
+    /* תיבות קלט */
+    .stTextInput > div > div > input,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div > div {
+        text-align: right;
+        direction: rtl;
+    }
+    
+    /* טבלאות */
+    .stDataFrame {
+        direction: rtl;
+    }
+    
+    /* מטריקות (metrics) */
+    [data-testid="stMetricValue"] {
+        direction: ltr;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================
 # פונקציות עזר
 # ============================================
