@@ -4,7 +4,7 @@ from datetime import datetime
 import pandas as pd
 import json
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # ============================================
 # הגדרות ראשוניות
@@ -47,7 +47,7 @@ def get_google_sheet():
         
         # טעינת credentials מ-Secrets
         creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         client = gspread.authorize(creds)
         
         # פתיחת הגיליון
