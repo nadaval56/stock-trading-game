@@ -332,9 +332,11 @@ def main_page():
             st.rerun()
     
     st.markdown("---")
+    # הצגת שער דולר
+    usd_to_ils = get_usd_to_ils()
+    st.info(f"💱 **שער דולר-שקל היום:** ${1:.2f} = {usd_to_ils:.3f} ₪")
     
     # חישוב שווי תיק נוכחי
-    usd_to_ils = get_usd_to_ils()
     stocks_value = 0
     for symbol, data in portfolio['stocks'].items():
         current_price_usd = get_stock_price(symbol)
@@ -379,23 +381,49 @@ def main_page():
         with col1:
             st.subheader("🛒 קנה מניה")
             
-            # רשימת מניות פופולריות
+            # רשימת מניות ומניות סל פופולריות
             popular_stocks = {
-                "Apple (AAPL)": "AAPL",
-                "Microsoft (MSFT)": "MSFT",
-                "Tesla (TSLA)": "TSLA",
-                "Amazon (AMZN)": "AMZN",
-                "Google (GOOGL)": "GOOGL",
-                "Meta/Facebook (META)": "META",
-                "NVIDIA (NVDA)": "NVDA",
-                "Netflix (NFLX)": "NFLX",
-                "Coca-Cola (KO)": "KO",
-                "McDonald's (MCD)": "MCD",
-                "Nike (NKE)": "NKE",
-                "Disney (DIS)": "DIS",
-                "Intel (INTC)": "INTC",
-                "AMD (AMD)": "AMD",
-                "Teva (TEVA)": "TEVA",
+                "--- מניות סל (ETFs) ---": "HEADER1",
+                "📊 SPY - S&P 500 (500 חברות גדולות)": "SPY",
+                "📊 QQQ - NASDAQ 100 (טכנולוגיה)": "QQQ",
+                "📊 VTI - כלל שוק ארה\"ב": "VTI",
+                "📊 VXUS - כלל עולמי (ללא ארה\"ב)": "VXUS",
+                "📊 VOO - S&P 500 (Vanguard)": "VOO",
+                "--- טכנולוגיה ---": "HEADER2",
+                "🍎 Apple (AAPL)": "AAPL",
+                "💻 Microsoft (MSFT)": "MSFT",
+                "🔍 Google (GOOGL)": "GOOGL",
+                "📱 Meta/Facebook (META)": "META",
+                "🎮 NVIDIA (NVDA)": "NVDA",
+                "🌐 Amazon (AMZN)": "AMZN",
+                "🎬 Netflix (NFLX)": "NFLX",
+                "💾 Intel (INTC)": "INTC",
+                "🖥️ AMD (AMD)": "AMD",
+                "💻 IBM (IBM)": "IBM",
+                "☁️ Oracle (ORCL)": "ORCL",
+                "--- רכב וחלל ---": "HEADER3",
+                "🚗 Tesla (TSLA)": "TSLA",
+                "🚙 Ford (F)": "F",
+                "🏭 General Motors (GM)": "GM",
+                "✈️ Boeing (BA)": "BA",
+                "--- צריכה ומזון ---": "HEADER4",
+                "🥤 Coca-Cola (KO)": "KO",
+                "🍔 McDonald's (MCD)": "MCD",
+                "☕ Starbucks (SBUX)": "SBUX",
+                "🛒 Walmart (WMT)": "WMT",
+                "🎯 Target (TGT)": "TGT",
+                "--- ספורט ופיננסים ---": "HEADER5",
+                "👟 Nike (NKE)": "NKE",
+                "🏰 Disney (DIS)": "DIS",
+                "💳 Visa (V)": "V",
+                "💳 Mastercard (MA)": "MA",
+                "💰 PayPal (PYPL)": "PYPL",
+                "--- חברות ישראליות ---": "HEADER6",
+                "💊 Teva (TEVA)": "TEVA",
+                "🔒 Check Point (CHKP)": "CHKP",
+                "🌐 Wix (WIX)": "WIX",
+                "📞 Nice (NICE)": "NICE",
+                "📋 Monday.com (MNDY)": "MNDY",
                 "--- או הכנס ידנית ---": "CUSTOM"
             }
             
@@ -405,8 +433,13 @@ def main_page():
                 key="stock_choice"
             )
             
+            buy_symbol = None
+            
+            # אם בחר כותרת - לא עושים כלום
+            if popular_stocks[stock_choice].startswith("HEADER"):
+                st.info("👆 בחר מניה מהרשימה")
             # אם בחר "הכנס ידנית" - תן לו להקליד
-            if popular_stocks[stock_choice] == "CUSTOM":
+            elif popular_stocks[stock_choice] == "CUSTOM":
                 buy_symbol = st.text_input(
                     "הכנס סימול (לדוגמה: AAPL)",
                     key="buy_symbol_custom"
