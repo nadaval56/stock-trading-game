@@ -535,17 +535,25 @@ def main_page():
     """הדף הראשי של המערכת"""
     username = st.session_state.username
     
-    # בדיקה אם המשתמש קיים ב-portfolios - אם לא, צור לו תיק
+    # בדיקה אם המשתמש קיים ב-portfolios - אם לא, הצג שגיאה
     if username not in st.session_state.portfolios:
-        st.session_state.portfolios[username] = {
-            'cash': 10000,
-            'stocks': {},
-            'history': []
-        }
-        # שמירה ל-Google Sheets
-        save_portfolios()
-        st.success(f"✅ נוצר תיק חדש עבור {username}!")
-        st.rerun()
+        st.error(f"❌ שגיאה: לא נמצא תיק עבור {username}")
+        st.warning("👨‍🏫 **למורה:** צור תיק למשתמש זה דרך לוח הבקרה")
+        
+        # כפתור ליצירת תיק (רק למורה)
+        if username == "nadav":
+            if st.button("✅ צור תיק למשתמש זה"):
+                st.session_state.portfolios[username] = {
+                    'cash': 10000,
+                    'stocks': {},
+                    'history': []
+                }
+                save_portfolios()
+                st.success(f"✅ תיק נוצר בהצלחה!")
+                st.rerun()
+        else:
+            st.info("נא לפנות למורה ליצירת תיק")
+        return
     
     portfolio = st.session_state.portfolios[username]
     
@@ -914,6 +922,36 @@ def main_page():
             if students_data:
                 df = pd.DataFrame(students_data)
                 st.dataframe(df, hide_index=True)
+            
+            st.markdown("---")
+            
+            # יצירת תיקים למשתמשים חדשים
+            st.markdown("### ➕ הוספת תלמידים חדשים")
+            
+            # מציאת משתמשים שב-Secrets אבל אין להם תיק
+            users_in_secrets = set(st.secrets['users'].keys())
+            users_with_portfolio = set(st.session_state.portfolios.keys())
+            missing_users = users_in_secrets - users_with_portfolio
+            
+            if missing_users:
+                st.info(f"🆕 נמצאו {len(missing_users)} משתמשים ב-Secrets שאין להם תיק:")
+                for user in missing_users:
+                    col_user, col_btn = st.columns([3, 1])
+                    with col_user:
+                        st.write(f"👤 **{user}**")
+                    with col_btn:
+                        if st.button("➕ צור תיק", key=f"create_{user}"):
+                            st.session_state.portfolios[user] = {
+                                'cash': 10000,
+                                'stocks': {},
+                                'history': []
+                            }
+                            save_portfolios()
+                            st.success(f"✅ תיק נוצר עבור {user}!")
+                            time.sleep(1)
+                            st.rerun()
+            else:
+                st.success("✅ לכל המשתמשים ב-Secrets יש תיק!")
             
             st.markdown("---")
             
