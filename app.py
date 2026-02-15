@@ -534,6 +534,19 @@ def login_page():
 def main_page():
     """הדף הראשי של המערכת"""
     username = st.session_state.username
+    
+    # בדיקה אם המשתמש קיים ב-portfolios - אם לא, צור לו תיק
+    if username not in st.session_state.portfolios:
+        st.session_state.portfolios[username] = {
+            'cash': 10000,
+            'stocks': {},
+            'history': []
+        }
+        # שמירה ל-Google Sheets
+        save_portfolios()
+        st.success(f"✅ נוצר תיק חדש עבור {username}!")
+        st.rerun()
+    
     portfolio = st.session_state.portfolios[username]
     
     # וידוא שהתיק תקין (במקרה של נתונים פגומים)
@@ -818,7 +831,7 @@ def main_page():
                     })
             
             df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, hide_index=True)
         else:
             st.info("אין לך מניות בתיק כרגע")
     
@@ -900,7 +913,7 @@ def main_page():
             
             if students_data:
                 df = pd.DataFrame(students_data)
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, hide_index=True)
             
             st.markdown("---")
             
