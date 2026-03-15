@@ -109,8 +109,8 @@ def load_portfolios():
         st.info("נסה לרענן את הדף. אם הבעיה נמשכת, פנה למורה.")
         st.stop()
 
-def save_portfolios():
-    """שמירת נתוני התיקים ל-Google Sheets - עם הגנות חזקות"""
+def save_single_user(username):
+    """שמירת תיק של משתמש בודד - בטוח ומדויק!"""
     sheet = get_google_sheet()
     
     # 🛡️ אם אין חיבור - לא שומרים
@@ -119,49 +119,41 @@ def save_portfolios():
         return False
     
     try:
-        portfolios = st.session_state.portfolios
-        
-        # 🛡️ הגנה 1: אל תשמור אם ריק לגמרי
-        if not portfolios or len(portfolios) == 0:
-            st.error("🔴 ⚠️ **PREVENTED DISASTER:** ניסיון לשמור 0 תיקים!")
-            st.error("השמירה בוטלה כדי להגן על הנתונים.")
+        # וידוא שהמשתמש קיים ב-session
+        if username not in st.session_state.portfolios:
+            st.error(f"🔴 שגיאה: {username} לא קיים ב-session")
             return False
         
-        # 🛡️ הגנה 2: אל תשמור אם חסרים הרבה תיקים
-        users_in_secrets = len(st.secrets['users'])
-        if len(portfolios) < users_in_secrets * 0.5:
-            st.error(f"🔴 ⚠️ **PREVENTED DISASTER:** יש רק {len(portfolios)} תיקים מתוך {users_in_secrets}!")
-            st.error("השמירה בוטלה כדי להגן על הנתונים.")
-            st.warning("נסה לרענן את הדף ולנסות שוב.")
-            return False
+        portfolio = st.session_state.portfolios[username]
         
-        # ✅ נראה בסדר - בואו נשמור
+        # קריאת כל הנתונים כדי למצוא את השורה
+        all_data = sheet.get_all_records()
+        row_number = None
         
-        # בניית הנתונים
-        data_to_save = []
-        for username, portfolio in portfolios.items():
-            data_to_save.append({
-                'username': username,
-                'cash': portfolio['cash'],
-                'stocks': json.dumps(portfolio['stocks'], ensure_ascii=False),
-                'history': json.dumps(portfolio['history'], ensure_ascii=False)
-            })
+        # חיפוש השורה של המשתמש
+        for idx, row in enumerate(all_data):
+            if row.get('username') == username:
+                row_number = idx + 2  # +2 כי: 1=header, 0-indexed
+                break
         
-        df = pd.DataFrame(data_to_save)
+        # הכנת הנתונים
+        cash_value = portfolio['cash']
+        stocks_json = json.dumps(portfolio['stocks'], ensure_ascii=False)
+        history_json = json.dumps(portfolio['history'], ensure_ascii=False)
         
-        # ניקוי ושמירה
-        sheet.clear()
-        headers = ['username', 'cash', 'stocks', 'history']
-        sheet.insert_row(headers, 1)
+        if row_number:
+            # עדכון שורה קיימת
+            sheet.update_cell(row_number, 2, cash_value)
+            sheet.update_cell(row_number, 3, stocks_json)
+            sheet.update_cell(row_number, 4, history_json)
+        else:
+            # הוספת שורה חדשה
+            sheet.append_row([username, cash_value, stocks_json, history_json])
         
-        for idx, row in df.iterrows():
-            sheet.insert_row(row.tolist(), idx + 2)
-        
-        # ✅ הצלחה!
         return True
         
     except Exception as e:
-        st.error(f"🔴 שגיאה בשמירת נתונים: {e}")
+        st.error(f"🔴 שגיאה בשמירת {username}: {e}")
         return False
 
 def get_usd_to_ils():
@@ -310,7 +302,7 @@ def buy_stock(username, symbol, shares):
         'total': total_with_commission
     })
     
-    save_portfolios()
+    save_single_user(username)
     return True, f"קנית {shares} מניות של {symbol} ב-${price_usd:.2f} (₪{price_ils:.2f}) | עמלה: ₪{commission:.2f}"
 
 def sell_stock(username, symbol, shares):
@@ -350,7 +342,7 @@ def sell_stock(username, symbol, shares):
         'total': total_after_commission
     })
     
-    save_portfolios()
+    save_single_user(username)
     return True, f"מכרת {shares} מניות של {symbol} ב-${price_usd:.2f} (₪{price_ils:.2f}) | עמלה: ₪{commission:.2f}"
 
 def create_portfolio(username):
@@ -360,7 +352,7 @@ def create_portfolio(username):
         'stocks': {},
         'history': []
     }
-    save_portfolios()
+    save_single_user(username)
 
 def reset_portfolio(username):
     """איפוס תיק"""
@@ -370,7 +362,7 @@ def reset_portfolio(username):
             'stocks': {},
             'history': []
         }
-        save_portfolios()
+        save_single_user(username)
         return True
     return False
 
